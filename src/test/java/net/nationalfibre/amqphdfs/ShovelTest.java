@@ -2,6 +2,7 @@ package net.nationalfibre.amqphdfs;
 
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.Consumer;
 import com.rabbitmq.client.Envelope;
 import java.io.BufferedWriter;
@@ -19,6 +20,7 @@ public class ShovelTest
     public void testRotateShouldCloseTmpFiles() throws Exception
     {
         final Channel channel     = mock(Channel.class);
+        final Connection conn     = mock(Connection.class);
         final FileSystem fs       = mock(FileSystem.class);
         final ShovelConfig cfg    = mock(ShovelConfig.class);
         final BufferedWriter b1   = mock(BufferedWriter.class);
@@ -38,6 +40,9 @@ public class ShovelTest
         when(cfg.getCurrentTime()).thenReturn(2L);
         when(cfg.getTmpFileName(1L)).thenReturn("/tmp/1.tmp");
         when(cfg.getFileName("1")).thenReturn("/tmp/1");
+
+        when(conn.isOpen()).thenReturn(true);
+        when(channel.getConnection()).thenReturn(conn);
 
         when(fs.exists(new Path("/tmp/1.tmp"))).thenReturn(true);
         when(fs.rename(new Path("/tmp/1.tmp"), new Path("/tmp/1"))).thenReturn(true);

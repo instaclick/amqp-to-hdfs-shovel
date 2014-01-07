@@ -22,9 +22,9 @@ import org.apache.hadoop.conf.Configuration;
 
 public class Main
 {
-    private static final Log logger = LogFactory.getLog(Main.class);
     private static final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     private static final ExecutorService executor = Executors.newFixedThreadPool(1);
+    private static final Log logger = LogFactory.getLog(Main.class);
     private static final Configuration conf = new Configuration();
 
     public static void main (String[] args) throws IOException

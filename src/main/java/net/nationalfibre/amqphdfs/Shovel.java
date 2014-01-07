@@ -111,6 +111,16 @@ public class Shovel
         final Long currentTimeWindow  = conf.getCurrentTime();
         final Set<Long> bufferKeys    = buffers.keySet();
 
+        if (getFileSystem() == null) {
+            logger.debug("Ignore hdfs connection failure");
+            return;
+        }
+
+        if (channel.getConnection() == null || ! channel.getConnection().isOpen()) {
+            logger.debug("Ignore amqp connection failure");
+            return;
+        }
+
         for (Long key : bufferKeys) {
 
             if (currentTimeWindow.equals(key)) {
@@ -134,7 +144,7 @@ public class Shovel
             }
 
             getFileSystem().rename(fromPath, toPath);
-            logger.debug(String.format("rename ('%s','%s'): ", fromPath.getName(), toPath.getName()));
+            logger.debug(String.format("rotate ('%s','%s'): ", fromPath.getName(), toPath.getName()));
         }
 
         if (tagReference.get() > lastTagReference) {
