@@ -33,7 +33,7 @@ public class Shovel
         this.conf       = conf;
     }
 
-    private FileSystem getFileSystem() throws IOException
+    protected FileSystem getFileSystem() throws IOException
     {
         return FileSystem.get(conf.getHdfsConf());
     }
@@ -65,7 +65,7 @@ public class Shovel
                         buffers.put(timeWindow, writer);
                     }
 
-                } catch (Exception ex) {
+                } catch (IOException ex) {
 
                     logger.error(this, ex);
                     buffers.clear();
@@ -87,6 +87,8 @@ public class Shovel
                     } catch (InterruptedException ex1) {
                         logger.error(this, ex1);
                     }
+                } catch (Exception ex) {
+                    logger.error(this, ex);
                 }
             }
         };
