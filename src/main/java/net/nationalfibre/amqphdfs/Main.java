@@ -42,6 +42,7 @@ public class Main
         final ConnectionOptions options = new ConnectionOptions()
                 .withConsumerExecutor(executor)
                 .withHost(shovelConfig.getAmqpHost())
+                .withPort(shovelConfig.getAmqpPort())
                 .withUsername(shovelConfig.getAmqpUsername())
                 .withPassword(shovelConfig.getAmqpPassword())
                 .withVirtualHost(shovelConfig.getAmqpVHost());

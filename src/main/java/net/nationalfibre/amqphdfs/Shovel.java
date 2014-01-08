@@ -56,9 +56,7 @@ public class Shovel
                     writer.append(new String(body) + "\n");
                     writer.flush();
 
-                    if (envelope.getDeliveryTag() > tagReference.get()) {
-                        tagReference.set(envelope.getDeliveryTag());
-                    }
+                    tagReference.set(envelope.getDeliveryTag());
 
                     if ( ! buffers.containsKey(timeWindow)) {
                         logger.debug("Create tmp file : " + filePath);
@@ -111,15 +109,35 @@ public class Shovel
         final Long currentTimeWindow  = conf.getCurrentTime();
         final Set<Long> bufferKeys    = buffers.keySet();
 
+        logger.debug("Rotate begin");
+
         if (getFileSystem() == null) {
             logger.debug("Ignore hdfs connection failure");
             return;
         }
 
         if (channel.getConnection() == null || ! channel.getConnection().isOpen()) {
-            logger.debug("Ignore amqp connection failure");
+            logger.debug("Handle amqp connection failure");
+
+            for (Long key : bufferKeys) {
+
+                try {
+                    buffers.get(key).close();
+                } catch (IOException e) {
+                    logger.error(this, e);
+                }
+
+                buffers.remove(key);
+                logger.debug("Ignore tmp file : " + key);
+            }
+
+            tagReference.set(-1L);
+
             return;
         }
+
+        logger.debug("Current window   : " + currentTimeWindow);
+        logger.debug("Current amqp tag : " + tagReference.get());
 
         for (Long key : bufferKeys) {
 

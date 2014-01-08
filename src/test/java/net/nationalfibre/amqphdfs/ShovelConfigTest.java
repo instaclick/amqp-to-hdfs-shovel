@@ -21,10 +21,10 @@ public class ShovelConfigTest
         String expResult      = "/logs/click-1000";
         ShovelConfig instance = ShovelConfig.create()
             .withFilePrefix("click-")
-            .withRootPath("/logs/");
+            .withHdfsPath("/logs/");
 
         assertEquals("click-", instance.getFilePrefix());
-        assertEquals("/logs", instance.getRootPath());
+        assertEquals("/logs", instance.getHdfsPath());
         assertEquals(expResult, instance.getFileName("1000"));
         assertEquals(expResult+".tmp", instance.getTmpFileName("1000"));
     }

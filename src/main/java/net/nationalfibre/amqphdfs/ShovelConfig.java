@@ -8,15 +8,16 @@ public class ShovelConfig
     Configuration hdfsConf;
     String filePrefix;
     String hdfsHost;
-    String rootPath;
+    String hdfsPath;
     String queueName;
     String amqpHost;
     String amqpVHost = "/";
     String amqpUsername;
     String amqpPassword;
     int amqpQos = 0;
+    int amqpPort = 5672;
     Long windowsSize;
-    
+
     public ShovelConfig withWindowsSize(Long windowsSize)
     {
         this.windowsSize = windowsSize;
@@ -53,18 +54,18 @@ public class ShovelConfig
         return this;
     }
 
-    public String getRootPath()
+    public String getHdfsPath()
     {
-        return rootPath;
+        return hdfsPath;
     }
 
-    public ShovelConfig withRootPath(String rootPath)
+    public ShovelConfig withHdfsPath(String path)
     {
-        if (rootPath != null && rootPath.endsWith("/")) {
-            rootPath = rootPath.substring(0, rootPath.length()-1);
+        if (path != null && path.endsWith("/")) {
+            path = path.substring(0, path.length()-1);
         }
 
-        this.rootPath = rootPath;
+        this.hdfsPath = path;
 
         return this;
     }
@@ -141,6 +142,18 @@ public class ShovelConfig
         return this;
     }
 
+    public ShovelConfig withAmqpPort(int port)
+    {
+        this.amqpPort = port;
+
+        return this;
+    }
+
+    public int getAmqpPort()
+    {
+        return this.amqpPort;
+    }
+
     public Configuration getHdfsConf()
     {
         return hdfsConf;
@@ -177,7 +190,7 @@ public class ShovelConfig
     {
         String prefix = filePrefix != null ? filePrefix : "";
 
-        return rootPath + "/" + prefix + name;
+        return hdfsPath + "/" + prefix + name;
     }
 
     public static ShovelConfig create()
@@ -194,10 +207,11 @@ public class ShovelConfig
 
         self.withWindowsSize(config.getLong("amqp-to-hdfs-shovel.time.window"))
             .withHdfsHost(config.getString("amqp-to-hdfs-shovel.hdfs.host"))
-            .withRootPath(config.getString("amqp-to-hdfs-shovel.hdfs.path"))
+            .withHdfsPath(config.getString("amqp-to-hdfs-shovel.hdfs.path"))
             .withQueueName(config.getString("amqp-to-hdfs-shovel.queue.name"))
             .withFilePrefix(config.getString("amqp-to-hdfs-shovel.file.prefix"))
             .withAmqpHost(config.getString("amqp-to-hdfs-shovel.amqp.host"))
+            .withAmqpPort(config.getInt("amqp-to-hdfs-shovel.amqp.port"))
             .withAmqpUsername(config.getString("amqp-to-hdfs-shovel.amqp.user"))
             .withAmqpPassword(config.getString("amqp-to-hdfs-shovel.amqp.pass"))
             .withAmqpQos(config.getInt("amqp-to-hdfs-shovel.amqp.qos"))
