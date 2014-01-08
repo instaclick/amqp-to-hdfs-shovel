@@ -94,9 +94,9 @@ public class Shovel
 
     public void consume(Consumer consumer) throws IOException
     {
-        logger.debug("Starting consumer");
+        logger.info("Starting consumer");
         channel.basicConsume(conf.getQueueName(), consumer);
-        logger.debug("basic consumer started");
+        logger.info("Consumer started");
     }
 
     public void consume() throws IOException
@@ -109,15 +109,13 @@ public class Shovel
         final Long currentTimeWindow  = conf.getCurrentTime();
         final Set<Long> bufferKeys    = buffers.keySet();
 
-        logger.debug("Rotate begin");
-
         if (getFileSystem() == null) {
-            logger.debug("Ignore hdfs connection failure");
+            logger.warn("Ignore hdfs connection failure");
             return;
         }
 
         if (channel.getConnection() == null || ! channel.getConnection().isOpen()) {
-            logger.debug("Handle amqp connection failure");
+            logger.warn("Handle amqp connection failure");
 
             for (Long key : bufferKeys) {
 
@@ -128,7 +126,7 @@ public class Shovel
                 }
 
                 buffers.remove(key);
-                logger.debug("Ignore tmp file : " + key);
+                logger.warn("While disconected, Ignoring tmp file : " + key);
             }
 
             tagReference.set(-1L);
@@ -136,7 +134,24 @@ public class Shovel
             return;
         }
 
-        logger.debug("Current window   : " + currentTimeWindow);
+        if (buffers.isEmpty()) {
+            return;
+        }
+
+        flush(currentTimeWindow);
+    }
+
+    public synchronized void flush(final Long currentTimeWindow) throws IOException
+    {
+        final Set<Long> bufferKeys    = buffers.keySet();
+
+        if (bufferKeys.isEmpty()) {
+            logger.debug("There are no buffers to flush");
+
+            return;
+        }
+
+        logger.debug("Flush begin");
         logger.debug("Current amqp tag : " + tagReference.get());
 
         for (Long key : bufferKeys) {
@@ -162,7 +177,7 @@ public class Shovel
             }
 
             getFileSystem().rename(fromPath, toPath);
-            logger.debug(String.format("rotate ('%s','%s'): ", fromPath.getName(), toPath.getName()));
+            logger.info(String.format("rotate ('%s','%s'): ", fromPath.getName(), toPath.getName()));
         }
 
         if (tagReference.get() > lastTagReference) {

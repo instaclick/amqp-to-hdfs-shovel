@@ -19,6 +19,8 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.util.ShutdownHookManager;
+import static org.apache.hadoop.fs.FileSystem.SHUTDOWN_HOOK_PRIORITY;
 
 public class Main
 {
@@ -54,7 +56,8 @@ public class Main
         final Connection connection = Connections.create(options, config);
         final Channel channel       = connection.createChannel();
         final Shovel  shovel        = new Shovel(channel, shovelConfig);
-        final Runnable rotator      = new Runnable() {
+
+        final Runnable rotator = new Runnable() {
             @Override
             public void run() {
                 try {
@@ -65,10 +68,22 @@ public class Main
             }
         };
 
-        logger.debug("Start ...");
+        final Runnable shutdownHook = new Runnable() {
+            @Override
+            public void run() {
+                logger.info("Stoping ...");
+                runStop(channel, shovel);
+                logger.info("Done ...");
+            }
+        };
 
+        logger.info("Starting ...");
+
+        ShutdownHookManager.get().addShutdownHook(shutdownHook, SHUTDOWN_HOOK_PRIORITY + 1);
         channel.basicQos(shovelConfig.getAmqpQos());
         start(channel, shovel);
+
+        logger.info("Started ...");
 
         scheduler.scheduleAtFixedRate(rotator, shovelConfig.getWindowsSize(), shovelConfig.getWindowsSize(), TimeUnit.SECONDS);
     }
@@ -85,6 +100,21 @@ public class Main
             } catch (InterruptedException ex) {
                 logger.error(ex);
             }
+        }
+    }
+
+    public static void runStop(final Channel channel, final Shovel shovel)
+    {
+        try {
+            shovel.flush(-1L);
+        } catch (IOException e) {
+            logger.warn(e);
+        }
+
+        try {
+            channel.close();
+        } catch (IOException e) {
+            logger.warn(e);
         }
     }
 }
