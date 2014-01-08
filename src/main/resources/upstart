@@ -1,0 +1,13 @@
+# AMQP to HDFS
+description     AMQP to HDFS"
+
+start on filesystem
+stop on runlevel [06]
+setgid nobody
+setuid nobody
+kill signal INT
+respawn
+
+script
+  /usr/bin/java -jar /opt/amqp-to-hdfs-shovel/amqp-to-hdfs-shovel.jar /etc/amqp-to-hdfs-shovel/app.conf
+end script
