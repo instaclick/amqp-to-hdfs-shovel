@@ -141,7 +141,6 @@
                                 <mkdir dir="${project.build.directory}/install/etc/init.d" />
                                 <mkdir dir="${project.build.directory}/install/etc/amqp-to-hdfs-shovel" />
                                 <mkdir dir="${project.build.directory}/install/opt/amqp-to-hdfs-shovel" />
-                                <mkdir dir="${project.build.directory}/install/opt/amqp-to-hdfs-shovel/log" />
 
                                 <copy 
                                     tofile="${project.build.directory}/install/opt/amqp-to-hdfs-shovel/amqp-to-hdfs-shovel.jar"
@@ -160,7 +159,7 @@
                                     file="${basedir}/src/main/resources/upstart" />
 
                                 <tar
-                                    destfile="${project.build.directory}/install-${project.version}.tar"
+                                    destfile="${project.build.directory}/install-${project.build.finalName}.tar"
                                     basedir="${project.build.directory}/install"/>
                             </target>
                         </configuration>
