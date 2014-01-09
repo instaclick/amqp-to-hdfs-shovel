@@ -5,6 +5,7 @@ import com.typesafe.config.Config;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import net.jodah.lyra.ConnectionOptions;
 import net.jodah.lyra.Connections;
@@ -21,6 +22,7 @@ public class ShovelConfig
     String hdfsHost;
     String hdfsPath;
     Long windowsSize;
+    Mode mode;
 
     private ShovelConfig(String queueName)
     {
@@ -39,6 +41,18 @@ public class ShovelConfig
         this.filePrefix = prefix;
 
         return this;
+    }
+
+    public ShovelConfig withMode(Mode mode)
+    {
+        this.mode = mode;
+
+        return this;
+    }
+
+    public Mode getMode()
+    {
+        return mode;
     }
 
     public Long getWindowsSize()
@@ -98,22 +112,20 @@ public class ShovelConfig
 
     public long getCurrentWindow()
     {
-        return (getCurrentMilliseconds() / 1000) / this.windowsSize;
+        return (System.currentTimeMillis() / 1000) / this.windowsSize;
     }
 
-    public long getCurrentMilliseconds()
+    public String getGenerateUnique()
     {
-        return System.currentTimeMillis();
-    }
+        if (mode == Mode.LONG) {
+            return String.valueOf(Math.abs(UUID.randomUUID().getMostSignificantBits()));
+        }
 
-    public String getTmpPathName()
-    {
-        return getTmpFileName(getCurrentWindow());
-    }
+        if (mode == Mode.UUID) {
+            return UUID.randomUUID().toString();
+        }
 
-    public String getTmpFileName(Long timeWindow)
-    {
-        return getTmpFileName(String.valueOf(timeWindow));
+        return String.valueOf(System.currentTimeMillis());
     }
 
     public String getTmpFileName(String name)
@@ -128,11 +140,6 @@ public class ShovelConfig
         return hdfsPath + "/" + prefix + name;
     }
 
-    public String getFileName(Long name)
-    {
-        return getFileName(String.valueOf(name));
-    }
-
     public static ShovelConfig create(String name)
     {
         return new ShovelConfig(name);
@@ -142,6 +149,9 @@ public class ShovelConfig
     {
         final Map<String, ShovelConfig> map = new HashMap<String, ShovelConfig>();
         final Configuration hdfsConfig = new Configuration();
+        final Mode mode = config.hasPath("rotate.mode")
+            ? Mode.valueOf(config.getString("rotate.mode"))
+            : Mode.UUID;
 
         hdfsConfig.set("fs.defaultFS", config.getString("hdfs.host"));
 
@@ -150,7 +160,8 @@ public class ShovelConfig
             final ShovelConfig cfg = create(name);
 
             cfg.withHdfsHost(config.getString("hdfs.host"))
-                .withHdfsConf(hdfsConfig);
+                .withHdfsConf(hdfsConfig)
+                .withMode(mode);
 
             cfg.withWindowsSize(current.getLong("window"))
                 .withHdfsPath(current.getString("path"));
@@ -180,5 +191,12 @@ public class ShovelConfig
             .withRetryPolicy(new RetryPolicy().withBackoff(Duration.seconds(1), Duration.seconds(30)));
 
         return Connections.create(options, c);
+    }
+
+    enum Mode
+    {
+        LONG,
+        UUID,
+        TIME
     }
 }

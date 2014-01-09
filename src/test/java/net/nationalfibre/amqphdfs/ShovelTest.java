@@ -40,9 +40,9 @@ public class ShovelTest
         instance.tagReference.set(11L);
 
         when(cfg.getCurrentWindow()).thenReturn(2L);
-        when(cfg.getCurrentMilliseconds()).thenReturn(1111L);
-        when(cfg.getFileName(1111L)).thenReturn(b1.getTarget());
-        when(cfg.getTmpFileName(1111L)).thenReturn(b1.getSource());
+        when(cfg.getGenerateUnique()).thenReturn("1111");
+        when(cfg.getFileName("1111")).thenReturn(b1.getTarget());
+        when(cfg.getTmpFileName("1111")).thenReturn(b1.getSource());
 
         when(conn.isOpen()).thenReturn(true);
         when(channel.getConnection()).thenReturn(conn);
@@ -91,17 +91,17 @@ public class ShovelTest
         instance.tagReference.set(11L);
 
         when(cfg.getCurrentWindow()).thenReturn(33L);
-        when(cfg.getCurrentMilliseconds()).thenReturn(33L);
+        when(cfg.getGenerateUnique()).thenReturn("33");
         when(envelope.getDeliveryTag()).thenReturn(333L);
-        when(cfg.getFileName(33L)).thenReturn("/tmp/33");
-        when(cfg.getTmpFileName(33L)).thenReturn("/tmp/33.tmp");
+        when(cfg.getFileName("33")).thenReturn("/tmp/33");
+        when(cfg.getTmpFileName("33")).thenReturn("/tmp/33.tmp");
         when(fs.create(new Path("/tmp/33.tmp"), true)).thenReturn(os);
 
         consumer.handleDelivery(consumerTag, envelope, properties, body);
 
         verify(cfg).getCurrentWindow();
-        verify(cfg).getTmpFileName(33L);
-        verify(cfg).getFileName(33L);
+        verify(cfg).getFileName("33");
+        verify(cfg).getTmpFileName("33");
         verify(fs).create(new Path("/tmp/33.tmp"), true);
 
         assertEquals(3, instance.buffers.size());

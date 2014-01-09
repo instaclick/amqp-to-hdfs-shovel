@@ -137,10 +137,11 @@
                         <phase>package</phase>
                         <configuration>
                             <target name="package-filter-plugin">
-
+                                <delete dir="${project.build.directory}/install"/>
                                 <mkdir dir="${project.build.directory}/install/etc/init.d" />
                                 <mkdir dir="${project.build.directory}/install/etc/amqp-to-hdfs-shovel" />
                                 <mkdir dir="${project.build.directory}/install/opt/amqp-to-hdfs-shovel" />
+                                <mkdir dir="${project.build.directory}/install/opt/amqp-to-hdfs-shovel/log" />
 
                                 <copy 
                                     tofile="${project.build.directory}/install/opt/amqp-to-hdfs-shovel/amqp-to-hdfs-shovel.jar"

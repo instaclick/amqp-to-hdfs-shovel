@@ -97,9 +97,9 @@ public class Shovel
 
     protected Buffer createBuffer(Long timeWindow) throws IOException
     {
-        final Long millisec                   = conf.getCurrentMilliseconds();
-        final String source                   = conf.getTmpFileName(millisec);
-        final String target                   = conf.getFileName(millisec);
+        final String uniq                     = conf.getGenerateUnique();
+        final String source                   = conf.getTmpFileName(uniq);
+        final String target                   = conf.getFileName(uniq);
         final Path path                       = new Path(source);
         final OutputStreamWriter outputStream = new OutputStreamWriter(getFileSystem().create(path, true));
         final BufferedWriter writer           = new BufferedWriter(outputStream);
