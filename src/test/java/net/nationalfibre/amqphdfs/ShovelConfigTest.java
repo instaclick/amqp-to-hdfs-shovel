@@ -8,18 +8,18 @@ public class ShovelConfigTest
     @Test
     public void testWindowsSizeAndCurrentTime()
     {
-        ShovelConfig instance = ShovelConfig.create().withWindowsSize(10L);
+        ShovelConfig instance = ShovelConfig.create("test1").withWindowsSize(10L);
         long expResult        = (System.currentTimeMillis() / 1000) / 10;
 
         assertEquals(10, (long)instance.getWindowsSize());
-        assertEquals(expResult, instance.getCurrentTime());
+        assertEquals(expResult, instance.getCurrentWindow());
     }
 
     @Test
     public void testFilePrefixAndCurrentTime()
     {
         String expResult      = "/logs/click-1000";
-        ShovelConfig instance = ShovelConfig.create()
+        ShovelConfig instance = ShovelConfig.create("test2")
             .withFilePrefix("click-")
             .withHdfsPath("/logs/");
 

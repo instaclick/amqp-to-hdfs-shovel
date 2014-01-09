@@ -1,22 +1,31 @@
 package net.nationalfibre.amqphdfs;
 
+import com.rabbitmq.client.Connection;
 import com.typesafe.config.Config;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import net.jodah.lyra.ConnectionOptions;
+import net.jodah.lyra.Connections;
+import net.jodah.lyra.config.RecoveryPolicies;
+import net.jodah.lyra.config.RetryPolicy;
+import net.jodah.lyra.util.Duration;
 import org.apache.hadoop.conf.Configuration;
 
 public class ShovelConfig
 {
+    final String queueName;
     Configuration hdfsConf;
     String filePrefix;
     String hdfsHost;
     String hdfsPath;
-    String queueName;
-    String amqpHost;
-    String amqpVHost = "/";
-    String amqpUsername;
-    String amqpPassword;
-    int amqpQos = 0;
-    int amqpPort = 5672;
     Long windowsSize;
+
+    private ShovelConfig(String queueName)
+    {
+        this.queueName = queueName;
+    }
 
     public ShovelConfig withWindowsSize(Long windowsSize)
     {
@@ -75,85 +84,6 @@ public class ShovelConfig
         return queueName;
     }
 
-    public ShovelConfig withQueueName(String queueName)
-    {
-        this.queueName = queueName;
-
-        return this;
-    }
-
-    public String getAmqpHost()
-    {
-        return amqpHost;
-    }
-
-    public ShovelConfig withAmqpHost(String amqpHost)
-    {
-        this.amqpHost = amqpHost;
-
-        return this;
-    }
-
-    public String getAmqpVHost()
-    {
-        return amqpVHost;
-    }
-
-    public ShovelConfig withAmqpVHost(String amqpVHost)
-    {
-        this.amqpVHost = amqpVHost;
-
-        return this;
-    }
-
-    public String getAmqpUsername()
-    {
-        return amqpUsername;
-    }
-
-    public ShovelConfig withAmqpUsername(String amqpUsername)
-    {
-        this.amqpUsername = amqpUsername;
-
-        return this;
-    }
-
-    public String getAmqpPassword()
-    {
-        return amqpPassword;
-    }
-
-    public ShovelConfig withAmqpPassword(String amqpPassword)
-    {
-        this.amqpPassword = amqpPassword;
-
-        return this;
-    }
-
-    public int getAmqpQos()
-    {
-        return amqpQos;
-    }
-
-    public ShovelConfig withAmqpQos(int amqpQos)
-    {
-        this.amqpQos = amqpQos;
-
-        return this;
-    }
-
-    public ShovelConfig withAmqpPort(int port)
-    {
-        this.amqpPort = port;
-
-        return this;
-    }
-
-    public int getAmqpPort()
-    {
-        return this.amqpPort;
-    }
-
     public Configuration getHdfsConf()
     {
         return hdfsConf;
@@ -166,14 +96,19 @@ public class ShovelConfig
         return this;
     }
 
-    public long getCurrentTime()
+    public long getCurrentWindow()
     {
-        return (System.currentTimeMillis() / 1000) / this.windowsSize;
+        return (getCurrentMilliseconds() / 1000) / this.windowsSize;
+    }
+
+    public long getCurrentMilliseconds()
+    {
+        return System.currentTimeMillis();
     }
 
     public String getTmpPathName()
     {
-        return getTmpFileName(getCurrentTime());
+        return getTmpFileName(getCurrentWindow());
     }
 
     public String getTmpFileName(Long timeWindow)
@@ -193,30 +128,57 @@ public class ShovelConfig
         return hdfsPath + "/" + prefix + name;
     }
 
-    public static ShovelConfig create()
+    public String getFileName(Long name)
     {
-        return new ShovelConfig();
+        return getFileName(String.valueOf(name));
     }
 
-    public static ShovelConfig create(Config config)
+    public static ShovelConfig create(String name)
     {
-        Configuration hdfsConfig = new Configuration();
-        ShovelConfig self        = create();
+        return new ShovelConfig(name);
+    }
 
-        hdfsConfig.set("fs.defaultFS", config.getString("amqp-to-hdfs-shovel.hdfs.host"));
+    public static Map<String, ShovelConfig> createAll(final Config config)
+    {
+        final Map<String, ShovelConfig> map = new HashMap<String, ShovelConfig>();
+        final Configuration hdfsConfig = new Configuration();
 
-        self.withWindowsSize(config.getLong("amqp-to-hdfs-shovel.time.window"))
-            .withHdfsHost(config.getString("amqp-to-hdfs-shovel.hdfs.host"))
-            .withHdfsPath(config.getString("amqp-to-hdfs-shovel.hdfs.path"))
-            .withQueueName(config.getString("amqp-to-hdfs-shovel.queue.name"))
-            .withFilePrefix(config.getString("amqp-to-hdfs-shovel.file.prefix"))
-            .withAmqpHost(config.getString("amqp-to-hdfs-shovel.amqp.host"))
-            .withAmqpPort(config.getInt("amqp-to-hdfs-shovel.amqp.port"))
-            .withAmqpUsername(config.getString("amqp-to-hdfs-shovel.amqp.user"))
-            .withAmqpPassword(config.getString("amqp-to-hdfs-shovel.amqp.pass"))
-            .withAmqpQos(config.getInt("amqp-to-hdfs-shovel.amqp.qos"))
-            .withHdfsConf(hdfsConfig);
+        hdfsConfig.set("fs.defaultFS", config.getString("hdfs.host"));
 
-        return self;
+        for (Config current : config.getConfigList("shovels")) {
+            final String name      = current.getString("name");
+            final ShovelConfig cfg = create(name);
+
+            cfg.withHdfsHost(config.getString("hdfs.host"))
+                .withHdfsConf(hdfsConfig);
+
+            cfg.withWindowsSize(current.getLong("window"))
+                .withHdfsPath(current.getString("path"));
+
+            if (current.hasPath("prefix")) {
+                cfg.withFilePrefix(current.getString("prefix"));
+            }
+
+            map.put(name, cfg);
+        }
+
+        return map;
+    }
+
+    public static Connection createAmqpConnection(final ExecutorService executor, Config config) throws IOException
+    {
+        final ConnectionOptions options = new ConnectionOptions()
+                .withConsumerExecutor(executor)
+                .withPort(config.getInt("amqp.port"))
+                .withHost(config.getString("amqp.host"))
+                .withUsername(config.getString("amqp.user"))
+                .withPassword(config.getString("amqp.pass"))
+                .withVirtualHost(config.getString("amqp.vhost"));
+
+        final net.jodah.lyra.config.Config c = new net.jodah.lyra.config.Config()
+            .withRecoveryPolicy(RecoveryPolicies.recoverAlways())
+            .withRetryPolicy(new RetryPolicy().withBackoff(Duration.seconds(1), Duration.seconds(30)));
+
+        return Connections.create(options, c);
     }
 }

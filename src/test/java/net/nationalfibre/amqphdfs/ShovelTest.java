@@ -23,9 +23,11 @@ public class ShovelTest
         final Connection conn     = mock(Connection.class);
         final FileSystem fs       = mock(FileSystem.class);
         final ShovelConfig cfg    = mock(ShovelConfig.class);
-        final BufferedWriter b1   = mock(BufferedWriter.class);
-        final BufferedWriter b2   = mock(BufferedWriter.class);
-        final Shovel instance     = new Shovel(channel, cfg){
+        final BufferedWriter w1   = mock(BufferedWriter.class);
+        final BufferedWriter w2   = mock(BufferedWriter.class);
+        final Shovel.Buffer b1    = new Shovel.Buffer(1L, "/tmp/1.tmp", "/tmp/1", w1);
+        final Shovel.Buffer b2    = new Shovel.Buffer(2L, "/tmp/2.tmp", "/tmp/2", w2);
+        final Shovel instance     = new Shovel(channel, cfg) {
             @Override
             protected FileSystem getFileSystem() throws IOException
             {
@@ -33,25 +35,26 @@ public class ShovelTest
             }
         };
 
-        instance.buffers.put(1L, b1);
-        instance.buffers.put(2L, b2);
+        instance.buffers.put(b1.getWindow(), b1);
+        instance.buffers.put(b2.getWindow(), b2);
         instance.tagReference.set(11L);
 
-        when(cfg.getCurrentTime()).thenReturn(2L);
-        when(cfg.getTmpFileName(1L)).thenReturn("/tmp/1.tmp");
-        when(cfg.getFileName("1")).thenReturn("/tmp/1");
+        when(cfg.getCurrentWindow()).thenReturn(2L);
+        when(cfg.getCurrentMilliseconds()).thenReturn(1111L);
+        when(cfg.getFileName(1111L)).thenReturn(b1.getTarget());
+        when(cfg.getTmpFileName(1111L)).thenReturn(b1.getSource());
 
         when(conn.isOpen()).thenReturn(true);
         when(channel.getConnection()).thenReturn(conn);
 
-        when(fs.exists(new Path("/tmp/1.tmp"))).thenReturn(true);
-        when(fs.rename(new Path("/tmp/1.tmp"), new Path("/tmp/1"))).thenReturn(true);
+        when(fs.exists(new Path(b1.getSource()))).thenReturn(true);
+        when(fs.rename(new Path(b1.getSource()), new Path(b1.getTarget()))).thenReturn(true);
 
         instance.rotate();
 
-        verify(b1).close();
-        verify(b2, times(0)).close();
-        verify(fs).rename(new Path("/tmp/1.tmp"), new Path("/tmp/1"));
+        verify(w1).close();
+        verify(w2, times(0)).close();
+        verify(fs).rename(new Path(b1.getSource()), new Path(b1.getTarget()));
         verify(channel).basicAck(11L, true);
 
         assertEquals(1, instance.buffers.size());
@@ -64,8 +67,10 @@ public class ShovelTest
         final Channel channel       = mock(Channel.class);
         final FileSystem fs         = mock(FileSystem.class);
         final ShovelConfig cfg      = mock(ShovelConfig.class);
-        final BufferedWriter b1     = mock(BufferedWriter.class);
-        final BufferedWriter b2     = mock(BufferedWriter.class);
+        final BufferedWriter w1     = mock(BufferedWriter.class);
+        final BufferedWriter w2     = mock(BufferedWriter.class);
+        final Shovel.Buffer b1      = new Shovel.Buffer(1L, "/tmp/1.tmp", "/tmp/1", w1);
+        final Shovel.Buffer b2      = new Shovel.Buffer(2L, "/tmp/2.tmp", "/tmp/2", w2);
         final FSDataOutputStream os = mock(FSDataOutputStream.class);
         final Shovel instance       = new Shovel(channel, cfg){
             @Override
@@ -85,20 +90,59 @@ public class ShovelTest
         instance.buffers.put(2L, b2);
         instance.tagReference.set(11L);
 
-        when(cfg.getCurrentTime()).thenReturn(33L);
+        when(cfg.getCurrentWindow()).thenReturn(33L);
+        when(cfg.getCurrentMilliseconds()).thenReturn(33L);
         when(envelope.getDeliveryTag()).thenReturn(333L);
+        when(cfg.getFileName(33L)).thenReturn("/tmp/33");
         when(cfg.getTmpFileName(33L)).thenReturn("/tmp/33.tmp");
         when(fs.create(new Path("/tmp/33.tmp"), true)).thenReturn(os);
 
         consumer.handleDelivery(consumerTag, envelope, properties, body);
 
-        verify(cfg).getCurrentTime();
+        verify(cfg).getCurrentWindow();
         verify(cfg).getTmpFileName(33L);
+        verify(cfg).getFileName(33L);
         verify(fs).create(new Path("/tmp/33.tmp"), true);
 
         assertEquals(3, instance.buffers.size());
         assertTrue(instance.buffers.containsKey(33L));
         assertEquals(333L, (long)instance.tagReference.get());
+    }
+
+    @Test
+    public void testRotateBasedOnBufferPath() throws Exception
+    {
+        final Channel channel     = mock(Channel.class);
+        final Connection conn     = mock(Connection.class);
+        final FileSystem fs       = mock(FileSystem.class);
+        final ShovelConfig cfg    = mock(ShovelConfig.class);
+        final BufferedWriter w1   = mock(BufferedWriter.class);
+        final Shovel.Buffer b1    = new Shovel.Buffer(1L, "/tmp/11111.tmp", "/tmp/11111", w1);
+        final Shovel instance     = new Shovel(channel, cfg) {
+            @Override
+            protected FileSystem getFileSystem() throws IOException
+            {
+                return fs;
+            }
+        };
+
+        instance.buffers.put(b1.getWindow(), b1);
+        instance.tagReference.set(11L);
+
+        when(cfg.getCurrentWindow()).thenReturn(2L);
+        when(conn.isOpen()).thenReturn(true);
+        when(channel.getConnection()).thenReturn(conn);
+
+        when(fs.exists(new Path(b1.getSource()))).thenReturn(true);
+        when(fs.rename(new Path(b1.getSource()), new Path(b1.getTarget()))).thenReturn(true);
+
+        instance.rotate();
+
+        verify(w1).close();
+        verify(fs).rename(new Path(b1.getSource()), new Path(b1.getTarget()));
+        verify(channel).basicAck(11L, true);
+
+        assertTrue(instance.buffers.isEmpty());
     }
 
 }

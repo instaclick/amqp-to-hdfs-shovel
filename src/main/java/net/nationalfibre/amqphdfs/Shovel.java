@@ -19,18 +19,24 @@ import org.apache.hadoop.fs.Path;
 
 public class Shovel
 {
-    final Map<Long, BufferedWriter> buffers = new ConcurrentHashMap<Long, BufferedWriter>();
+    final Map<Long, Buffer> buffers = new ConcurrentHashMap<Long, Buffer>();
     final AtomicReference<Long> tagReference = new AtomicReference(-1L);
-    final Log logger = LogFactory.getLog(Shovel.class);
     final ShovelConfig conf;
     final Channel channel;
+    final Log logger;
 
     Long lastTagReference = -1L;
 
     public Shovel(Channel channel, ShovelConfig conf)
     {
+        this.logger     = LogFactory.getLog(String.format("%s[%s]", getClass().getName(), conf.getQueueName()));
         this.channel    = channel;
         this.conf       = conf;
+    }
+
+    public Channel getChannel()
+    {
+        return channel;
     }
 
     protected FileSystem getFileSystem() throws IOException
@@ -44,23 +50,20 @@ public class Shovel
             @Override
             public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body)
             {
-                final Long timeWindow       = conf.getCurrentTime();
-                final String filePath       = conf.getTmpFileName(timeWindow);
-                final Path path             = new Path(filePath);
-
                 try {
-                    final BufferedWriter writer = ( ! buffers.containsKey(timeWindow))
-                            ? new BufferedWriter(new OutputStreamWriter(getFileSystem().create(path, true)))
-                            : buffers.get(timeWindow);
+                    final Long timeWindow   = conf.getCurrentWindow();
+                    final Buffer buffer     = buffers.containsKey(timeWindow)
+                        ? buffers.get(timeWindow)
+                        : createBuffer(timeWindow);
 
-                    writer.append(new String(body) + "\n");
-                    writer.flush();
+                    buffer.getWriter().append(new String(body) + "\n");
+                    buffer.getWriter().flush();
 
                     tagReference.set(envelope.getDeliveryTag());
 
                     if ( ! buffers.containsKey(timeWindow)) {
-                        logger.debug("Create tmp file : " + filePath);
-                        buffers.put(timeWindow, writer);
+                        logger.debug("Create tmp file : " + buffer.getSource());
+                        buffers.put(timeWindow, buffer);
                     }
 
                 } catch (IOException ex) {
@@ -92,6 +95,18 @@ public class Shovel
         };
     }
 
+    protected Buffer createBuffer(Long timeWindow) throws IOException
+    {
+        final Long millisec                   = conf.getCurrentMilliseconds();
+        final String source                   = conf.getTmpFileName(millisec);
+        final String target                   = conf.getFileName(millisec);
+        final Path path                       = new Path(source);
+        final OutputStreamWriter outputStream = new OutputStreamWriter(getFileSystem().create(path, true));
+        final BufferedWriter writer           = new BufferedWriter(outputStream);
+
+        return new Buffer(timeWindow, source, target, writer);
+    }
+
     public void consume(Consumer consumer) throws IOException
     {
         logger.info("Starting consumer");
@@ -101,12 +116,14 @@ public class Shovel
 
     public void consume() throws IOException
     {
+
+
         consume(createConsumer());
     }
 
     public synchronized void rotate() throws IOException
     {
-        final Long currentTimeWindow  = conf.getCurrentTime();
+        final Long currentTimeWindow  = conf.getCurrentWindow();
         final Set<Long> bufferKeys    = buffers.keySet();
 
         if (getFileSystem() == null) {
@@ -120,7 +137,7 @@ public class Shovel
             for (Long key : bufferKeys) {
 
                 try {
-                    buffers.get(key).close();
+                    buffers.get(key).getWriter().close();
                 } catch (IOException e) {
                     logger.error(this, e);
                 }
@@ -160,16 +177,18 @@ public class Shovel
                 continue;
             }
 
+            final Buffer buffer = buffers.get(key);
+
             try {
-                buffers.get(key).close();
+                buffer.getWriter().close();
             } catch (IOException e) {
                 logger.error(this, e);
             }
 
             buffers.remove(key);
 
-            final Path fromPath = new Path(conf.getTmpFileName(key));
-            final Path toPath   = new Path(conf.getFileName(String.valueOf(key)));
+            final Path fromPath = new Path(buffer.getSource());
+            final Path toPath   = new Path(buffer.getTarget());
 
             if ( ! getFileSystem().exists(fromPath)) {
                 logger.debug("Ignore file : " + fromPath.getName());
@@ -177,7 +196,7 @@ public class Shovel
             }
 
             getFileSystem().rename(fromPath, toPath);
-            logger.info(String.format("rotate ('%s','%s'): ", fromPath.getName(), toPath.getName()));
+            logger.info(String.format("'%s' -> '%s'", fromPath.getName(), toPath.getName()));
         }
 
         if (tagReference.get() > lastTagReference) {
@@ -186,6 +205,42 @@ public class Shovel
             logger.debug(String.format("%s - Message Ack", lastTagReference));
 
             channel.basicAck(lastTagReference, true);
+        }
+    }
+
+    static class Buffer
+    {
+        final Long window;
+        final String source;
+        final String target;
+        final BufferedWriter writer;
+
+        public Buffer(Long window, String source, String target, BufferedWriter writer)
+        {
+            this.source = source;
+            this.target = target;
+            this.window = window;
+            this.writer = writer;
+        }
+
+        public String getSource()
+        {
+            return source;
+        }
+
+        public String getTarget()
+        {
+            return target;
+        }
+
+        public Long getWindow()
+        {
+            return window;
+        }
+
+        public BufferedWriter getWriter()
+        {
+            return writer;
         }
     }
 }
